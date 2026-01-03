@@ -17,7 +17,7 @@ function App() {
   const [learningLang, setLearningLang] = useState('arabic');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mode, setMode] = useState('flashcards');
-  const [coachWrongAnswers, setCoachWrongAnswers] = useState([]);
+  const [coachContext, setCoachContext] = useState(null);
 
   // Determine which phrase set to use based on languages
   const isLearningArabicOrAzerbaijani = learningLang === 'arabic' || learningLang === 'azerbaijani';
@@ -29,7 +29,7 @@ function App() {
   useEffect(() => {
     setCurrentIndex(0);
     setMode('flashcards');
-    setCoachWrongAnswers([]);
+    setCoachContext(null);
   }, [learningLang, nativeLang]);
 
   const handleNativeChange = (lang) => {
@@ -54,8 +54,8 @@ function App() {
     }
   };
 
-  const handleStartCoach = (wrongAnswers) => {
-    setCoachWrongAnswers(wrongAnswers);
+  const handleStartCoach = (context) => {
+    setCoachContext(context);
     setMode('coach');
   };
 
@@ -112,7 +112,13 @@ function App() {
                 className={mode === 'quiz' ? 'active' : ''}
                 onClick={() => setMode('quiz')}
               >
-                Take Quiz
+                Quiz
+              </button>
+              <button
+                className={mode === 'coach' ? 'active' : 'coach-btn'}
+                onClick={() => handleStartCoach({ type: 'general', phrases: allCards })}
+              >
+                AI Coach
               </button>
             </div>
           </>
@@ -122,10 +128,11 @@ function App() {
       <main>
         {mode === 'coach' ? (
           <LanguageCoach
-            wrongAnswers={coachWrongAnswers}
+            context={coachContext}
+            allPhrases={allCards}
             nativeLang={nativeLang}
             learningLang={learningLang}
-            onBack={() => setMode('quiz')}
+            onBack={() => setMode('flashcards')}
           />
         ) : mode === 'quiz' ? (
           <Quiz
@@ -134,7 +141,7 @@ function App() {
             nativeLang={nativeLang}
             learningLang={learningLang}
             onExit={() => setMode('flashcards')}
-            onStartCoach={handleStartCoach}
+            onAskCoach={(currentPhrase) => handleStartCoach({ type: 'hint', phrase: currentPhrase, phrases: allCards })}
           />
         ) : (
           <>

@@ -16,14 +16,13 @@ function shuffleArray(array) {
   return shuffled;
 }
 
-export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStartCoach }) {
+export default function Quiz({ phrases, nativeLang, learningLang, onExit, onAskCoach }) {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
-  const [wrongAnswers, setWrongAnswers] = useState([]);
 
   // Determine direction of learning
   const isLearningArabicOrAz = learningLang === 'arabic' || learningLang === 'azerbaijani';
@@ -34,20 +33,17 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStar
       let questionText, questionTransliteration, correctAnswer, translation;
 
       if (isLearningArabicOrAz) {
-        // Show Arabic/Azerbaijani word, answer in native language
         questionText = phrase.word;
         questionTransliteration = phrase.transliteration;
         correctAnswer = nativeLang === 'en' ? phrase.en : phrase.es;
         translation = correctAnswer;
       } else {
-        // Show English/Spanish word, answer in Arabic/Azerbaijani
         questionText = learningLang === 'en' ? phrase.en : phrase.es;
         questionTransliteration = null;
         correctAnswer = phrase.word;
         translation = questionText;
       }
 
-      // Get wrong answers
       const otherPhrases = phrases.filter(p => {
         if (isLearningArabicOrAz) {
           const answer = nativeLang === 'en' ? p.en : p.es;
@@ -79,7 +75,6 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStar
     });
 
     setQuestions(quizQuestions);
-    setWrongAnswers([]);
   }, [phrases, nativeLang, learningLang, isLearningArabicOrAz]);
 
   const handleAnswer = (answer) => {
@@ -88,16 +83,8 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStar
     setSelectedAnswer(answer);
     setIsAnswered(true);
 
-    const currentQuestion = questions[currentIndex];
-    if (answer === currentQuestion.correctAnswer) {
+    if (answer === questions[currentIndex].correctAnswer) {
       setScore(score + 1);
-    } else {
-      // Track wrong answer
-      setWrongAnswers(prev => [...prev, {
-        word: currentQuestion.phrase.word,
-        transliteration: currentQuestion.phrase.transliteration,
-        translation: currentQuestion.translation
-      }]);
     }
   };
 
@@ -109,6 +96,15 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStar
     } else {
       setIsComplete(true);
     }
+  };
+
+  const handleAskForHint = () => {
+    const currentQuestion = questions[currentIndex];
+    onAskCoach({
+      word: currentQuestion.phrase.word,
+      transliteration: currentQuestion.phrase.transliteration,
+      translation: currentQuestion.translation
+    });
   };
 
   const getScoreMessage = (percentage) => {
@@ -129,7 +125,6 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStar
     }
   };
 
-  // Determine what language the question is in (for audio)
   const questionLang = isLearningArabicOrAz ? learningLang : learningLang;
 
   if (questions.length === 0) {
@@ -159,28 +154,11 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStar
               setIsAnswered(false);
               setScore(0);
               setIsComplete(false);
-              setWrongAnswers([]);
             }}
           >
             Retake Quiz
           </button>
         </div>
-        {wrongAnswers.length > 0 && (
-          <div className="coach-cta">
-            <p className="coach-cta-text">
-              Want to practice the {wrongAnswers.length} word{wrongAnswers.length > 1 ? 's' : ''} you missed?
-            </p>
-            <button
-              className="btn btn-coach"
-              onClick={() => onStartCoach(wrongAnswers)}
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-              </svg>
-              Practice with AI Coach
-            </button>
-          </div>
-        )}
       </div>
     );
   }
@@ -206,15 +184,29 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStar
         {currentQuestion.questionTransliteration && (
           <p className="quiz-transliteration">{currentQuestion.questionTransliteration}</p>
         )}
-        <button
-          className="audio-btn quiz-audio"
-          onClick={() => speakWord(currentQuestion.questionText, questionLang)}
-          aria-label="Listen to pronunciation"
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-          </svg>
-        </button>
+        <div className="quiz-actions">
+          <button
+            className="audio-btn quiz-audio"
+            onClick={() => speakWord(currentQuestion.questionText, questionLang)}
+            aria-label="Listen to pronunciation"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+          </button>
+          {!isAnswered && (
+            <button
+              className="hint-btn"
+              onClick={handleAskForHint}
+              aria-label="Get a hint from AI Coach"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+              </svg>
+              Get Hint
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="quiz-options">

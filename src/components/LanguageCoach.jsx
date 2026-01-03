@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-export default function LanguageCoach({ wrongAnswers, nativeLang, learningLang, onBack }) {
+export default function LanguageCoach({ context, allPhrases, nativeLang, learningLang, onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -16,9 +16,29 @@ export default function LanguageCoach({ wrongAnswers, nativeLang, learningLang, 
   }, [messages]);
 
   useEffect(() => {
-    // Auto-start conversation
-    sendMessage("I want to practice the words I got wrong.", true);
+    // Auto-start conversation based on context
+    if (context?.type === 'hint') {
+      sendMessage(`I need a hint for this word: "${context.phrase.word}" (${context.phrase.transliteration}). Don't tell me the answer directly, just give me a clue!`, true);
+    } else {
+      sendMessage("Hi! I want to practice my language skills. Can you help me learn?", true);
+    }
   }, []);
+
+  const getWordsForContext = () => {
+    if (context?.type === 'hint' && context.phrase) {
+      return [{
+        word: context.phrase.word,
+        transliteration: context.phrase.transliteration,
+        translation: context.phrase.translation
+      }];
+    }
+    // For general practice, use all phrases
+    return allPhrases.map(p => ({
+      word: p.word,
+      transliteration: p.transliteration,
+      translation: nativeLang === 'en' ? p.en : p.es
+    }));
+  };
 
   const sendMessage = async (text, isInitial = false) => {
     if (!text.trim() || isLoading) return;
@@ -37,14 +57,11 @@ export default function LanguageCoach({ wrongAnswers, nativeLang, learningLang, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          wrongAnswers: wrongAnswers.map(w => ({
-            word: w.word,
-            transliteration: w.transliteration,
-            translation: w.translation
-          })),
+          wrongAnswers: getWordsForContext(),
           nativeLang,
           learningLang,
-          conversationHistory: isInitial ? [] : messages
+          conversationHistory: isInitial ? [] : messages,
+          contextType: context?.type || 'general'
         }),
       });
 
@@ -56,7 +73,7 @@ export default function LanguageCoach({ wrongAnswers, nativeLang, learningLang, 
       const decoder = new TextDecoder();
       let assistantMessage = '';
 
-      setMessages(prev => [...prev, ...(isInitial ? [] : []), { role: 'assistant', content: '' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -106,6 +123,11 @@ export default function LanguageCoach({ wrongAnswers, nativeLang, learningLang, 
     sendMessage(input);
   };
 
+  const contextLabel = context?.type === 'hint' ? 'Getting hint for:' : 'Practice words:';
+  const wordsToShow = context?.type === 'hint'
+    ? [context.phrase]
+    : allPhrases.slice(0, 5);
+
   return (
     <div className="coach-container">
       <div className="coach-header">
@@ -113,16 +135,19 @@ export default function LanguageCoach({ wrongAnswers, nativeLang, learningLang, 
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
           </svg>
-          Back to Quiz
+          Back
         </button>
         <h2>AI Language Coach</h2>
       </div>
 
       <div className="words-to-practice">
-        <span className="practice-label">Practicing:</span>
-        {wrongAnswers.map((w, i) => (
+        <span className="practice-label">{contextLabel}</span>
+        {wordsToShow.map((w, i) => (
           <span key={i} className="practice-word">{w.word}</span>
         ))}
+        {context?.type !== 'hint' && allPhrases.length > 5 && (
+          <span className="practice-word more">+{allPhrases.length - 5} more</span>
+        )}
       </div>
 
       <div className="chat-messages">

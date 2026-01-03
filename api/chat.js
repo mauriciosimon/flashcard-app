@@ -17,7 +17,7 @@ export default async function handler(req) {
   }
 
   try {
-    const { message, wrongAnswers, nativeLang, learningLang, conversationHistory } = await req.json();
+    const { message, wrongAnswers, nativeLang, learningLang, conversationHistory, contextType } = await req.json();
 
     const langNames = {
       arabic: 'Arabic',
@@ -29,14 +29,36 @@ export default async function handler(req) {
     const learningLangName = langNames[learningLang] || learningLang;
     const nativeLangName = langNames[nativeLang] || nativeLang;
 
-    const systemPrompt = `You are a friendly, patient language tutor helping someone learn ${learningLangName}. Their native language is ${nativeLangName}.
+    let systemPrompt;
 
-WORDS TO PRACTICE (they got these wrong on their quiz):
+    if (contextType === 'hint') {
+      // Hint mode - give clues without revealing the answer
+      systemPrompt = `You are a friendly language tutor helping someone learn ${learningLangName}. Their native language is ${nativeLangName}.
+
+THE WORD THEY NEED A HINT FOR:
+${wrongAnswers.map(w => `- "${w.word}" (${w.transliteration}) = "${w.translation}"`).join('\n')}
+
+YOUR TASK:
+- Give a helpful HINT without revealing the exact translation
+- You can give clues like: the first letter, a rhyme, a related concept, or use it in context
+- Be encouraging and playful
+- Keep it to 1-2 sentences
+- NEVER say the direct translation - they need to figure it out!
+
+EXAMPLE HINTS:
+- "Think about what you say when you first see someone in the morning..."
+- "This starts with the letter 'G' and you say it when meeting people!"
+- "Imagine waving to a friend across the street..."`;
+    } else {
+      // General practice mode
+      systemPrompt = `You are a friendly, patient language tutor helping someone learn ${learningLangName}. Their native language is ${nativeLangName}.
+
+WORDS TO PRACTICE:
 ${wrongAnswers.map(w => `- "${w.word}" (${w.transliteration}) = "${w.translation}"`).join('\n')}
 
 YOUR APPROACH:
 - Start by greeting them in ${learningLangName} with the translation in parentheses
-- Create mini-conversations that naturally use the words they struggled with
+- Create mini-conversations that naturally use the words they're learning
 - When they try to use a word, gently correct any mistakes
 - Give pronunciation tips using the transliteration
 - Celebrate small wins with encouraging phrases
@@ -49,6 +71,7 @@ User: "I want to practice"
 You: "Marhaba! (Hello!) Let's start simple. Can you greet me back using the ${learningLangName} word for 'hello'?"
 
 Be warm, encouraging, and make learning feel like a conversation with a friend, not a test.`;
+    }
 
     const messages = [
       ...conversationHistory.map(msg => ({
