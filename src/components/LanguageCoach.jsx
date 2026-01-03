@@ -1,0 +1,161 @@
+import { useState, useRef, useEffect } from 'react';
+
+export default function LanguageCoach({ wrongAnswers, nativeLang, learningLang, onBack }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    // Auto-start conversation
+    sendMessage("I want to practice the words I got wrong.", true);
+  }, []);
+
+  const sendMessage = async (text, isInitial = false) => {
+    if (!text.trim() || isLoading) return;
+
+    const userMessage = { role: 'user', content: text };
+
+    if (!isInitial) {
+      setMessages(prev => [...prev, userMessage]);
+    }
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          wrongAnswers: wrongAnswers.map(w => ({
+            word: w.word,
+            transliteration: w.transliteration,
+            translation: w.translation
+          })),
+          nativeLang,
+          learningLang,
+          conversationHistory: isInitial ? [] : messages
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantMessage = '';
+
+      setMessages(prev => [...prev, ...(isInitial ? [] : []), { role: 'assistant', content: '' }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.text) {
+                assistantMessage += parsed.text;
+                setMessages(prev => {
+                  const newMessages = [...prev];
+                  newMessages[newMessages.length - 1] = {
+                    role: 'assistant',
+                    content: assistantMessage
+                  };
+                  return newMessages;
+                });
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I had trouble connecting. Please try again!'
+      }]);
+    } finally {
+      setIsLoading(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    sendMessage(input);
+  };
+
+  return (
+    <div className="coach-container">
+      <div className="coach-header">
+        <button className="back-btn" onClick={onBack}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+          </svg>
+          Back to Quiz
+        </button>
+        <h2>AI Language Coach</h2>
+      </div>
+
+      <div className="words-to-practice">
+        <span className="practice-label">Practicing:</span>
+        {wrongAnswers.map((w, i) => (
+          <span key={i} className="practice-word">{w.word}</span>
+        ))}
+      </div>
+
+      <div className="chat-messages">
+        {messages.map((msg, i) => (
+          <div key={i} className={`message ${msg.role}`}>
+            <div className="message-content">{msg.content}</div>
+          </div>
+        ))}
+        {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
+          <div className="message assistant">
+            <div className="message-content typing">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <form className="chat-input-form" onSubmit={handleSubmit}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your response..."
+          disabled={isLoading}
+        />
+        <button type="submit" disabled={isLoading || !input.trim()}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+  );
+}

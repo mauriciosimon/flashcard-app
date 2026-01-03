@@ -16,13 +16,14 @@ function shuffleArray(array) {
   return shuffled;
 }
 
-export default function Quiz({ phrases, nativeLang, learningLang, onExit }) {
+export default function Quiz({ phrases, nativeLang, learningLang, onExit, onStartCoach }) {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
+  const [wrongAnswers, setWrongAnswers] = useState([]);
 
   // Determine direction of learning
   const isLearningArabicOrAz = learningLang === 'arabic' || learningLang === 'azerbaijani';
@@ -30,18 +31,20 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit }) {
   useEffect(() => {
     const shuffledPhrases = shuffleArray(phrases);
     const quizQuestions = shuffledPhrases.map((phrase) => {
-      let questionText, questionTransliteration, correctAnswer;
+      let questionText, questionTransliteration, correctAnswer, translation;
 
       if (isLearningArabicOrAz) {
         // Show Arabic/Azerbaijani word, answer in native language
         questionText = phrase.word;
         questionTransliteration = phrase.transliteration;
         correctAnswer = nativeLang === 'en' ? phrase.en : phrase.es;
+        translation = correctAnswer;
       } else {
         // Show English/Spanish word, answer in Arabic/Azerbaijani
         questionText = learningLang === 'en' ? phrase.en : phrase.es;
         questionTransliteration = null;
         correctAnswer = phrase.word;
+        translation = questionText;
       }
 
       // Get wrong answers
@@ -55,7 +58,7 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit }) {
       });
 
       const shuffledOthers = shuffleArray(otherPhrases).slice(0, 3);
-      const wrongAnswers = shuffledOthers.map(p => {
+      const wrongOptions = shuffledOthers.map(p => {
         if (isLearningArabicOrAz) {
           return nativeLang === 'en' ? p.en : p.es;
         } else {
@@ -63,18 +66,20 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit }) {
         }
       });
 
-      const allAnswers = shuffleArray([correctAnswer, ...wrongAnswers]);
+      const allAnswers = shuffleArray([correctAnswer, ...wrongOptions]);
 
       return {
         phrase,
         questionText,
         questionTransliteration,
         correctAnswer,
+        translation,
         options: allAnswers
       };
     });
 
     setQuestions(quizQuestions);
+    setWrongAnswers([]);
   }, [phrases, nativeLang, learningLang, isLearningArabicOrAz]);
 
   const handleAnswer = (answer) => {
@@ -83,8 +88,16 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit }) {
     setSelectedAnswer(answer);
     setIsAnswered(true);
 
-    if (answer === questions[currentIndex].correctAnswer) {
+    const currentQuestion = questions[currentIndex];
+    if (answer === currentQuestion.correctAnswer) {
       setScore(score + 1);
+    } else {
+      // Track wrong answer
+      setWrongAnswers(prev => [...prev, {
+        word: currentQuestion.phrase.word,
+        transliteration: currentQuestion.phrase.transliteration,
+        translation: currentQuestion.translation
+      }]);
     }
   };
 
@@ -146,11 +159,28 @@ export default function Quiz({ phrases, nativeLang, learningLang, onExit }) {
               setIsAnswered(false);
               setScore(0);
               setIsComplete(false);
+              setWrongAnswers([]);
             }}
           >
             Retake Quiz
           </button>
         </div>
+        {wrongAnswers.length > 0 && (
+          <div className="coach-cta">
+            <p className="coach-cta-text">
+              Want to practice the {wrongAnswers.length} word{wrongAnswers.length > 1 ? 's' : ''} you missed?
+            </p>
+            <button
+              className="btn btn-coach"
+              onClick={() => onStartCoach(wrongAnswers)}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+              </svg>
+              Practice with AI Coach
+            </button>
+          </div>
+        )}
       </div>
     );
   }
