@@ -1,5 +1,81 @@
 import { useState, useRef, useEffect } from 'react';
 
+const LANG_CODES = {
+  arabic: 'ar-SA',
+  azerbaijani: 'az-AZ',
+  en: 'en-US',
+  es: 'es-ES'
+};
+
+function AudioWord({ word, lang }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const speak = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = LANG_CODES[lang] || 'en-US';
+      utterance.rate = 0.8;
+      utterance.onstart = () => setIsPlaying(true);
+      utterance.onend = () => setIsPlaying(false);
+      utterance.onerror = () => setIsPlaying(false);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  return (
+    <button className={`inline-audio ${isPlaying ? 'playing' : ''}`} onClick={speak}>
+      <span className="audio-word">{word}</span>
+      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+      </svg>
+    </button>
+  );
+}
+
+function MessageContent({ content, learningLang }) {
+  // Parse content for audio markers: 【word】 or [speak:word]
+  const parseContent = (text) => {
+    const parts = [];
+    // Match 【word】 or [speak:word] patterns
+    const regex = /【([^】]+)】|\[speak:([^\]]+)\]/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+      }
+      // Add the audio word
+      const word = match[1] || match[2];
+      parts.push({ type: 'audio', word });
+      lastIndex = regex.lastIndex;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push({ type: 'text', content: text.slice(lastIndex) });
+    }
+
+    return parts.length > 0 ? parts : [{ type: 'text', content: text }];
+  };
+
+  const parts = parseContent(content);
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.type === 'audio' ? (
+          <AudioWord key={i} word={part.word} lang={learningLang} />
+        ) : (
+          <span key={i}>{part.content}</span>
+        )
+      )}
+    </>
+  );
+}
+
 export default function LanguageCoach({ context, allPhrases, nativeLang, learningLang, onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -32,7 +108,6 @@ export default function LanguageCoach({ context, allPhrases, nativeLang, learnin
         translation: context.phrase.translation
       }];
     }
-    // For general practice, use all phrases
     return allPhrases.map(p => ({
       word: p.word,
       transliteration: p.transliteration,
@@ -153,7 +228,13 @@ export default function LanguageCoach({ context, allPhrases, nativeLang, learnin
       <div className="chat-messages">
         {messages.map((msg, i) => (
           <div key={i} className={`message ${msg.role}`}>
-            <div className="message-content">{msg.content}</div>
+            <div className="message-content">
+              {msg.role === 'assistant' ? (
+                <MessageContent content={msg.content} learningLang={learningLang} />
+              ) : (
+                msg.content
+              )}
+            </div>
           </div>
         ))}
         {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (

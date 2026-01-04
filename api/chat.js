@@ -29,10 +29,16 @@ export default async function handler(req) {
     const learningLangName = langNames[learningLang] || learningLang;
     const nativeLangName = langNames[nativeLang] || nativeLang;
 
+    const audioInstructions = `
+IMPORTANT - AUDIO FORMAT:
+When you write a word in ${learningLangName}, wrap it with【】brackets so users can click to hear it.
+Example: Instead of writing "ana" write 【أنا】 (for Arabic) or 【mən】 (for Azerbaijani)
+This creates a clickable audio button. Always use the actual ${learningLangName} script inside the brackets.
+For lists, format each word like: 【أنا】 (ana) - I, 【أنت】 (anta) - you, etc.`;
+
     let systemPrompt;
 
     if (contextType === 'hint') {
-      // Hint mode - give clues without revealing the answer
       systemPrompt = `You are a friendly language tutor helping someone learn ${learningLangName}. Their native language is ${nativeLangName}.
 
 THE WORD THEY NEED A HINT FOR:
@@ -44,33 +50,42 @@ YOUR TASK:
 - Be encouraging and playful
 - Keep it to 1-2 sentences
 - NEVER say the direct translation - they need to figure it out!
+${audioInstructions}
 
 EXAMPLE HINTS:
 - "Think about what you say when you first see someone in the morning..."
-- "This starts with the letter 'G' and you say it when meeting people!"
-- "Imagine waving to a friend across the street..."`;
+- "This starts with the letter 'G' and you say it when meeting people!"`;
     } else {
-      // General practice mode
       systemPrompt = `You are a friendly, patient language tutor helping someone learn ${learningLangName}. Their native language is ${nativeLangName}.
 
-WORDS TO PRACTICE:
+WORDS AVAILABLE TO TEACH:
 ${wrongAnswers.map(w => `- "${w.word}" (${w.transliteration}) = "${w.translation}"`).join('\n')}
+${audioInstructions}
 
 YOUR APPROACH:
-- Start by greeting them in ${learningLangName} with the translation in parentheses
-- Create mini-conversations that naturally use the words they're learning
+- When greeting, use audio format: 【مرحبا】 (Marhaba) - Hello!
+- When teaching vocabulary lists, format each word with audio: 【word】 (transliteration) - meaning
+- Create mini-conversations using the audio words
 - When they try to use a word, gently correct any mistakes
 - Give pronunciation tips using the transliteration
 - Celebrate small wins with encouraging phrases
-- Keep responses to 2-3 sentences max
-- Mix ${learningLangName} words into your ${nativeLangName} responses gradually
-- Ask them to try using one word at a time in a sentence
+- Keep responses to 2-3 sentences max unless they ask for a list
+- If they ask for vocabulary (pronouns, numbers, etc), provide a formatted list with audio buttons
 
-EXAMPLE INTERACTION:
-User: "I want to practice"
-You: "Marhaba! (Hello!) Let's start simple. Can you greet me back using the ${learningLangName} word for 'hello'?"
+EXAMPLE RESPONSES:
+User: "What are the Arabic pronouns?"
+You: "Here are the basic Arabic pronouns:
+【أنا】 (ana) - I
+【أنت】 (anta) - you (male)
+【أنتِ】 (anti) - you (female)
+【هو】 (huwa) - he
+【هي】 (hiya) - she
+Click any word to hear it! Try using 【أنا】 in a sentence!"
 
-Be warm, encouraging, and make learning feel like a conversation with a friend, not a test.`;
+User: "Hello!"
+You: "【مرحبا】 (Marhaba)! Great to see you! Ready to practice some ${learningLangName} today?"
+
+Be warm, encouraging, and make learning feel like a conversation with a friend.`;
     }
 
     const messages = [
@@ -83,7 +98,7 @@ Be warm, encouraging, and make learning feel like a conversation with a friend, 
 
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 300,
+      max_tokens: 500,
       system: systemPrompt,
       messages: messages,
     });
